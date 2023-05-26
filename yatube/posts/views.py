@@ -1,6 +1,5 @@
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.views.decorators.cache import cache_page
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PostForm, CommentForm
@@ -9,58 +8,49 @@ from .models import Group, Post, User, Follow
 NUMBER_OF_POSTS = 10
 
 
-@cache_page(20, key_prefix='index_page')
-def index(request):
-    post_list = Post.objects.select_related('author', 'group')
+def paginate_posts(request, post_list):
     paginator = Paginator(post_list, NUMBER_OF_POSTS)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     context = {
         'page_obj': page_obj,
     }
+    return page_obj, context
+
+
+def index(request):
+    post_list = Post.objects.select_related('author', 'group')
+    page_obj, context = paginate_posts(request, post_list)
     return render(request, 'posts/index.html', context)
 
 
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
-    posts = group.posts.select_related('author')
-    paginator = Paginator(posts, NUMBER_OF_POSTS)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    context = {
-        'group': group,
-        'page_obj': page_obj,
-    }
+    post_list = group.posts.select_related('author', 'group')
+    page_obj, context = paginate_posts(request, post_list)
+    context['group'] = group
     return render(request, 'posts/group_list.html', context)
 
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    posts = author.posts.select_related('group')
-    paginator = Paginator(posts, NUMBER_OF_POSTS)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    context = {
-        'author': author,
+    post_list = author.posts.select_related('author', 'group')
+    page_obj, context = paginate_posts(request, post_list)
+    context['author'] = author
+    following = request.user.is_authenticated and Follow.objects.filter(
+        author=author,
+        user=request.user,
+    ).exists()
+    context.update({
         'page_obj': page_obj,
-    }
-
-    if request.user.is_authenticated:
-        follow = Follow.objects.filter(
-            author=author,
-            user=request.user,
-        ).exists()
-        context = {
-            'author': author,
-            'page_obj': page_obj,
-            'following': follow,
-        }
+        'following': following,
+    })
     return render(request, 'posts/profile.html', context)
 
 
 def post_detail(request, post_id):
     post = get_object_or_404(Post, pk=post_id)
-    form = CommentForm(request.POST or None)
+    form = CommentForm(None)
     comments = post.comments.all()
     context = {
         'post': post,
@@ -99,8 +89,8 @@ def post_edit(request, post_id):
         form.save()
         return redirect('posts:post_detail', post.id)
     context = {
-        # убирая пост, тесты перестают работать,
-        # пока не понял как это фиксить.
+        # я все равно не понимаю как это сделать, попробал варианты
+        # с изменением этой функции, но без поста ничего не работает(
         'post': post,
         'form': form,
         'is_edit': True,
@@ -124,12 +114,7 @@ def add_comment(request, post_id):
 @login_required
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
-    paginator = Paginator(posts, NUMBER_OF_POSTS)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    context = {
-        'page_obj': page_obj,
-    }
+    page_obj, context = paginate_posts(request, posts)
     return render(request, 'posts/follow.html', context)
 
 

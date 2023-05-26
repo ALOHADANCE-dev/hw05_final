@@ -63,12 +63,12 @@ class PostPagesTests(TestCase):
             group=cls.group,
             image=uploaded,
         )
-        for new_posts in range(NUMBER_OF_CREATED_POST):
-            Post.objects.create(
-                text='Тестовый текст',
-                author=cls.user,
-                group=cls.group,
-            )
+        Post.objects.bulk_create([Post(
+            text='Тестовый текст',
+            author=cls.user,
+            group=cls.group,
+            image=uploaded,
+        ) for q in range(NUMBER_OF_CREATED_POST)])
 
     @classmethod
     def tearDownClass(cls):
@@ -92,21 +92,20 @@ class PostPagesTests(TestCase):
                     kwargs={'post_id': self.post.id}):
                         'posts/create_post.html',
             reverse('posts:post_create'): 'posts/create_post.html',
+            reverse('posts:follow_index'): 'posts/follow.html',
         }
         for reverse_name, template in templates_pages_names.items():
             with self.subTest(reverse_name=reverse_name):
-                cache.clear()
                 response = self.authorized_client.get(reverse_name)
                 self.assertTemplateUsed(response, template)
 
     def check_all(self, post):
-        cache.clear()
         self.assertEqual(post.text, PostPagesTests.post.text)
         self.assertEqual(post.group.id, PostPagesTests.group.id)
         self.assertEqual(post.author, PostPagesTests.user)
         self.assertEqual(self.post.pub_date,
                          PostPagesTests.post.pub_date)
-        self.assertIsNotNone(post.image)
+        self.assertEqual(self.post.image, PostPagesTests.post.image)
 
     def test_index_page_show_correct_context(self):
         """проверяем, что в шаблон главное передается правильный контекст"""
@@ -138,6 +137,10 @@ class PostPagesTests(TestCase):
             reverse(('posts:post_detail'), kwargs={'post_id': self.post.id})
         )
         self.check_all(response.context.get('post'))
+        form = response.context.get('form')
+        self.assertIsNotNone(form)
+        comments = response.context.get('comments')
+        self.assertEqual(len(comments), self.post.comments.count())
 
     def test_create_post_page_show_correct_context(self):
         """
@@ -151,6 +154,7 @@ class PostPagesTests(TestCase):
         form_fields = {
             'text': forms.fields.CharField,
             'group': forms.models.ModelChoiceField,
+            'image': forms.fields.ImageField,
         }
         for value, expected in form_fields.items():
             with self.subTest(value=value):
@@ -171,6 +175,7 @@ class PostPagesTests(TestCase):
         form_fields = {
             'text': forms.fields.CharField,
             'group': forms.models.ModelChoiceField,
+            'image': forms.fields.ImageField,
         }
         for value, expected in form_fields.items():
             with self.subTest(value=value):
@@ -180,13 +185,22 @@ class PostPagesTests(TestCase):
 
     def test_first_page_contains_ten_posts(self):
         """проверяем, что на первой странице 10 постов"""
+        # это скорее всего грязно так писать, но пока не определился куда
+        # если писать в сетап класс, то ломаются другие тесты
+        Post.objects.bulk_create([Post(
+            text='Тестовый текст',
+            author=self.follower,
+            group=self.group,
+        ) for q in range(NUMBER_OF_CREATED_POST)])
+        self.authorized_client.post(reverse('posts:profile_follow',
+                                            kwargs={'username': 'follower'}))
         page_names_args = (
             reverse('posts:index'),
             reverse('posts:group_list', kwargs={'slug': 'test-slug'}),
             reverse('posts:profile', kwargs={'username': 'HasNoName'}),
+            reverse('posts:follow_index')
         )
         for url_test in page_names_args:
-            cache.clear()
             response = self.authorized_client.get(url_test)
             self.assertEqual(len(response.context['page_obj']),
                              POSTS_ON_FIRST_PAGE)
@@ -198,7 +212,7 @@ class PostPagesTests(TestCase):
             reverse('posts:group_list',
                     kwargs={'slug': 'test-slug'}) + '?page=2',
             reverse('posts:profile',
-                    kwargs={'username': 'HasNoName'}) + '?page=2'
+                    kwargs={'username': 'HasNoName'}) + '?page=2',
         )
         for url in page_names_args:
             response = self.authorized_client.get(url)
@@ -224,6 +238,7 @@ class PostPagesTests(TestCase):
                 self.assertNotEqual(post_group, self.fake_group)
 
     def test_follow(self):
+        """Проверям подписку на пользователя"""
         followers_count = Follow.objects.count()
         self.followerized_client.post(
             reverse(
@@ -232,8 +247,12 @@ class PostPagesTests(TestCase):
             )
         )
         self.assertEqual(Follow.objects.count(), followers_count + 1)
+        follow = Follow.objects.latest('id')
+        self.assertEqual(follow.user, self.follower)
+        self.assertEqual(follow.author, self.user)
 
     def test_unfollow(self):
+        """Проверям отпписку от пользователя"""
         Follow.objects.create(
             user=self.user,
             author=self.follower,
@@ -248,17 +267,34 @@ class PostPagesTests(TestCase):
         self.assertEqual(Follow.objects.count(), followers_count - 1)
 
     def test_posts_follows(self):
-        Follow.objects.create(
-            user=self.user,
-            author=self.follower,
+        """Проверям отображение постов на странице избранных авторов"""
+        post = Post.objects.create(
+            text='Тестовый текст',
+            author=self.user,
         )
+        Follow.objects.create(
+            author=self.user,
+            user=self.follower,
+        )
+        response = self.followerized_client.get(
+            reverse('posts:follow_index')
+        )
+        self.assertIn(post, response.context['page_obj'].object_list)
+
+    def test_posts_followers(self):
+        """Проверям, что без подписки посты не попадают в блок подписок"""
         response = self.followerized_client.get(
             reverse('posts:follow_index')
         )
         self.assertNotIn(self.post, response.context['page_obj'].object_list)
 
-    def test_posts_followers(self):
-        response = self.followerized_client.get(
-            reverse('posts:follow_index')
-        )
-        self.assertNotIn(self.post, response.context['page_obj'].object_list)
+    def test_cache(self):
+        """Проверяем кэширование главной страницы"""
+        response_1 = self.authorized_client.get(reverse('posts:index'))
+        post_1 = Post.objects.get(id=1)
+        post_1.delete()
+        response_2 = self.authorized_client.get(reverse('posts:index'))
+        self.assertEqual(response_1.content, response_2.content)
+        cache.clear()
+        response_3 = self.authorized_client.get(reverse('posts:index'))
+        self.assertNotEqual(response_1.content, response_3.content)

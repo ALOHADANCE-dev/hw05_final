@@ -1,7 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, Client
 from django.urls import reverse
-from django.core.cache import cache
 from http import HTTPStatus
 
 from ..models import Post, Group
@@ -76,11 +75,35 @@ class PostsURLTests(TestCase):
         response = self.guest_client.get('unexisting_page')
         self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
 
+    def test_follow_page_response(self):
+        """Проверяем доступ guest_client к страницам подписок"""
+        urls = {
+            'follow_index': '/follow/',
+            'profile_follow': '/profile/HasNoName/follow/',
+            'profile_unfollow': '/profile/HasNoName/unfollow/'
+        }
+        response_follow_index = self.guest_client.get(
+            urls['follow_index']
+        )
+        self.assertRedirects(response_follow_index, reverse('users:login')
+                             + '?next=' + urls['follow_index'])
+        response_unfollow = self.guest_client.get(
+            urls['profile_unfollow']
+        )
+        self.assertRedirects(response_unfollow, reverse('users:login')
+                             + '?next=' + urls['profile_unfollow'])
+        response_follow = self.guest_client.get(
+            urls['profile_follow']
+        )
+        self.assertRedirects(response_follow, reverse('users:login')
+                             + '?next=' + urls['profile_follow'])
+
     def test_urls_authorised(self):
         """проверяем доступы авторизированного клиента(не автора)."""
         urls = {
             'post_edit': '/posts/1/edit/',
             'post_create': '/create/',
+            'follow_index': '/follow/',
         }
 
         response_post_create = self.authorized_not_author.get(
@@ -92,6 +115,10 @@ class PostsURLTests(TestCase):
             urls['post_edit']
         )
         self.assertRedirects(response_post_edit, '/posts/1/')
+        response_follow_index = self.authorized_not_author.get(
+            urls['follow_index']
+        )
+        self.assertEqual(response_follow_index.status_code, HTTPStatus.OK)
 
     def test_urls_author(self):
         """проверяем доступ автора к редактированию поста."""
@@ -110,9 +137,9 @@ class PostsURLTests(TestCase):
             '/create/': 'posts/create_post.html',
             '/posts/1/edit/': 'posts/create_post.html',
             'unexisting_page': 'core/404.html',
+            '/follow/': 'posts/follow.html'
         }
         for address, template in templates_url_names.items():
             with self.subTest(address=address):
-                cache.clear()
                 response = self.authorized_author.get(address)
                 self.assertTemplateUsed(response, template)

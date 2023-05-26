@@ -24,6 +24,19 @@ class PostModelTest(TestCase):
         expected_post_str = post.text[:NUMBER_OF_LETTERS]
         self.assertEqual(expected_post_str, str(post))
 
+    def test_verboses_names(self):
+        field_verboses = {
+            'text': 'Текст поста',
+            'pub_date': 'Дата публикации',
+            'group': 'Группа',
+            'author': 'Автор',
+            'image': 'Картинка',
+        }
+
+        for field, expected_verbose in field_verboses.items():
+            verbose_name = self.post._meta.get_field(field).verbose_name
+            self.assertEquals(verbose_name, expected_verbose)
+
 
 class GroupModelTest(TestCase):
     @classmethod
@@ -47,14 +60,13 @@ class CommentModelTest(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='author')
-        cls.user_2 = User.objects.create_user(username='Leha')
         cls.post = Post.objects.create(
             author=cls.user,
             text='Тестовый пост в тестовой группе и вообще в тесте',
         )
         cls.comment = Comment.objects.create(
             post=cls.post,
-            author=cls.user_2,
+            author=cls.user,
             text='Тестовый коммент'
         )
 

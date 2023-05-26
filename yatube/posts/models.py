@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
@@ -10,22 +11,26 @@ class Group(models.Model):
     # по поводу твоих комментариев с можно лучше,
     # я их себе отметил и сделаю позже, так как я очень
     # сильно догоняющий.
-    title = models.CharField(max_length=200)
-    slug = models.SlugField(max_length=50, unique=True)
-    description = models.TextField(max_length=400)
+    title = models.CharField(max_length=200, verbose_name='Заголовок')
+    slug = models.SlugField(max_length=50, verbose_name='Ссылка', unique=True)
+    description = models.TextField(max_length=400, verbose_name='Описание')
 
     def __str__(self):
         return self.title
+
+    class Meta:
+        verbose_name = 'Группа'
+        verbose_name_plural = 'Группы'
 
 
 class Post(models.Model):
     text = models.TextField(
         'Текст поста',
-        help_text='Введите текст поста'
+        help_text='Введите текст поста',
     )
     pub_date = models.DateTimeField(
         'Дата публикации',
-        auto_now_add=True
+        auto_now_add=True,
     )
     group = models.ForeignKey(
         'Group',
@@ -38,14 +43,14 @@ class Post(models.Model):
     )
     author = models.ForeignKey(
         User,
-        null=True,
+        null=False,
         on_delete=models.CASCADE,
         verbose_name='Автор'
     )
     image = models.ImageField(
         'Картинка',
         upload_to='posts/',
-        blank=True
+        blank=True,
     )
 
     def __str__(self):
@@ -54,6 +59,8 @@ class Post(models.Model):
     class Meta:
         ordering = ('-pub_date', )
         default_related_name = 'posts'
+        verbose_name = 'Пост'
+        verbose_name_plural = 'Посты'
 
 
 class Comment(models.Model):
@@ -65,7 +72,7 @@ class Comment(models.Model):
     )
     author = models.ForeignKey(
         User,
-        null=True,
+        null=False,
         on_delete=models.CASCADE,
         verbose_name='Автор',
         related_name='comments',
@@ -82,6 +89,10 @@ class Comment(models.Model):
     def __str__(self):
         return self.text[:NUMBER_OF_LETTERS]
 
+    class Meta:
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
+
 
 class Follow(models.Model):
     user = models.ForeignKey(
@@ -94,3 +105,13 @@ class Follow(models.Model):
         related_name='following',
         on_delete=models.CASCADE,
     )
+
+    class Meta:
+        unique_together = ('user', 'author')
+        verbose_name = 'Подписка'
+        verbose_name_plural = 'Подписки'
+
+    def clean(self):
+        if self.user == self.author:
+            raise ValidationError("Вы не можете подписаться сами на себя.")
+        super().clean()

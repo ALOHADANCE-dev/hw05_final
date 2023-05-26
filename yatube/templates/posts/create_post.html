@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-<title>{% block title %}
+{% block title %}
   {% if is_edit %}
     Редактировать пост
   {% else %}
     Новый пост                      
   {% endif %} 
-  {% endblock %} </title>
+{% endblock %}
 {% if is_edit %}
   Редактировать запись
 {% else %}

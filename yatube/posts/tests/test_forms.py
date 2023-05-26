@@ -7,7 +7,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from http import HTTPStatus
-from django.core.cache import cache
 
 from ..models import Comment, Group, Post
 
@@ -43,17 +42,6 @@ class PostCreateFormTests(TestCase):
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
-
-    def test_cache(self):
-        """Проверяем кэширование главной страницы"""
-        response_1 = self.authorized_client.get(reverse('posts:index'))
-        post_1 = Post.objects.get(id=1)
-        post_1.delete()
-        response_2 = self.authorized_client.get(reverse('posts:index'))
-        self.assertEqual(response_1.content, response_2.content)
-        cache.clear()
-        response_3 = self.authorized_client.get(reverse('posts:index'))
-        self.assertNotEqual(response_1.content, response_3.content)
 
     def test_post_create(self):
         """Проверяем, создается ли пост в БД."""
@@ -125,6 +113,11 @@ class PostCreateFormTests(TestCase):
         )
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertEqual(Comment.objects.count(), comments_count + 1)
+        self.assertTrue(Comment.objects.filter(
+            text=form_data['text'],
+            author=self.user,
+            post=self.post.id,
+        ).exists())
 
     def test_guest_client_redirect_when_create_post(self):
         """Проверка редиректа неавторизированного
