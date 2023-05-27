@@ -15,19 +15,19 @@ def paginate_posts(request, post_list):
     context = {
         'page_obj': page_obj,
     }
-    return page_obj, context
+    return context
 
 
 def index(request):
     post_list = Post.objects.select_related('author', 'group')
-    page_obj, context = paginate_posts(request, post_list)
+    context = paginate_posts(request, post_list)
     return render(request, 'posts/index.html', context)
 
 
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
     post_list = group.posts.select_related('author', 'group')
-    page_obj, context = paginate_posts(request, post_list)
+    context = paginate_posts(request, post_list)
     context['group'] = group
     return render(request, 'posts/group_list.html', context)
 
@@ -35,14 +35,13 @@ def group_posts(request, slug):
 def profile(request, username):
     author = get_object_or_404(User, username=username)
     post_list = author.posts.select_related('author', 'group')
-    page_obj, context = paginate_posts(request, post_list)
+    context = paginate_posts(request, post_list)
     context['author'] = author
     following = request.user.is_authenticated and Follow.objects.filter(
         author=author,
         user=request.user,
     ).exists()
     context.update({
-        'page_obj': page_obj,
         'following': following,
     })
     return render(request, 'posts/profile.html', context)
@@ -89,8 +88,6 @@ def post_edit(request, post_id):
         form.save()
         return redirect('posts:post_detail', post.id)
     context = {
-        # я все равно не понимаю как это сделать, попробал варианты
-        # с изменением этой функции, но без поста ничего не работает(
         'post': post,
         'form': form,
         'is_edit': True,
@@ -114,7 +111,7 @@ def add_comment(request, post_id):
 @login_required
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
-    page_obj, context = paginate_posts(request, posts)
+    context = paginate_posts(request, posts)
     return render(request, 'posts/follow.html', context)
 
 

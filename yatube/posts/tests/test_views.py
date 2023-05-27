@@ -138,7 +138,7 @@ class PostPagesTests(TestCase):
         )
         self.check_all(response.context.get('post'))
         form = response.context.get('form')
-        self.assertIsNotNone(form)
+        self.assertIsNotNone(form.fields)
         comments = response.context.get('comments')
         self.assertEqual(len(comments), self.post.comments.count())
 
@@ -187,13 +187,9 @@ class PostPagesTests(TestCase):
         """проверяем, что на первой странице 10 постов"""
         # это скорее всего грязно так писать, но пока не определился куда
         # если писать в сетап класс, то ломаются другие тесты
-        Post.objects.bulk_create([Post(
-            text='Тестовый текст',
-            author=self.follower,
-            group=self.group,
-        ) for q in range(NUMBER_OF_CREATED_POST)])
-        self.authorized_client.post(reverse('posts:profile_follow',
-                                            kwargs={'username': 'follower'}))
+        self.followerized_client.post(
+            reverse('posts:profile_follow',
+                    kwargs={'username': 'HasNoName'}))
         page_names_args = (
             reverse('posts:index'),
             reverse('posts:group_list', kwargs={'slug': 'test-slug'}),
@@ -201,21 +197,25 @@ class PostPagesTests(TestCase):
             reverse('posts:follow_index')
         )
         for url_test in page_names_args:
-            response = self.authorized_client.get(url_test)
+            response = self.followerized_client.get(url_test)
             self.assertEqual(len(response.context['page_obj']),
                              POSTS_ON_FIRST_PAGE)
 
     def test_second_page(self):
         """проверяем, что на второй странице 2 поста"""
+        self.followerized_client.post(
+            reverse('posts:profile_follow',
+                    kwargs={'username': 'HasNoName'}))
         page_names_args = (
             reverse('posts:index') + '?page=2',
             reverse('posts:group_list',
                     kwargs={'slug': 'test-slug'}) + '?page=2',
             reverse('posts:profile',
                     kwargs={'username': 'HasNoName'}) + '?page=2',
+            reverse('posts:follow_index') + '?page=2',
         )
         for url in page_names_args:
-            response = self.authorized_client.get(url)
+            response = self.followerized_client.get(url)
             self.assertEqual(len(response.context['page_obj']),
                              POSTS_ON_SECOND_PAGE)
 

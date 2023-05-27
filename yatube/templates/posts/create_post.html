@@ -14,7 +14,6 @@
 {% block content %}
 {% load static %}
 {% load user_filters %}
-    <main>
         <div class="row justify-content-center">
           <div class="col-md-8 p-5">
             <div class="card">
@@ -25,8 +24,8 @@
                   Новый
                 {% endif %} пост</div>
               <div class="card-body">        
-                <form method="post" enctype="multipart/form-data" action="{% if is_edit %} 
-                {% url 'posts:post_edit' post.id %} 
+                <form method="post" enctype="multipart/form-data" "{% if is_edit %} 
+                {% url 'posts:post_edit' form.instance.id %} 
                 {% else %} 
                 {% url 'posts:post_create' %}
                 {% endif %}" >
@@ -66,5 +65,4 @@
             </div>
           </div>
         </div>
-      </div>
 {% endblock %}

@@ -11,19 +11,25 @@ class Group(models.Model):
     # по поводу твоих комментариев с можно лучше,
     # я их себе отметил и сделаю позже, так как я очень
     # сильно догоняющий.
-    title = models.CharField(max_length=200, verbose_name='Заголовок')
-    slug = models.SlugField(max_length=50, verbose_name='Ссылка', unique=True)
-    description = models.TextField(max_length=400, verbose_name='Описание')
-
-    def __str__(self):
-        return self.title
-
     class Meta:
         verbose_name = 'Группа'
         verbose_name_plural = 'Группы'
 
+    title = models.CharField('Заголовок', max_length=200,)
+    slug = models.SlugField('Ссылка', max_length=50, unique=True)
+    description = models.TextField('Описание', max_length=400)
+
+    def __str__(self):
+        return self.title
+
 
 class Post(models.Model):
+    class Meta:
+        ordering = ('-pub_date', )
+        default_related_name = 'posts'
+        verbose_name = 'Пост'
+        verbose_name_plural = 'Посты'
+
     text = models.TextField(
         'Текст поста',
         help_text='Введите текст поста',
@@ -43,7 +49,6 @@ class Post(models.Model):
     )
     author = models.ForeignKey(
         User,
-        null=False,
         on_delete=models.CASCADE,
         verbose_name='Автор'
     )
@@ -56,14 +61,12 @@ class Post(models.Model):
     def __str__(self):
         return self.text[:NUMBER_OF_LETTERS]
 
-    class Meta:
-        ordering = ('-pub_date', )
-        default_related_name = 'posts'
-        verbose_name = 'Пост'
-        verbose_name_plural = 'Посты'
-
 
 class Comment(models.Model):
+    class Meta:
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
+
     post = models.ForeignKey(
         Post,
         verbose_name='Пост',
@@ -89,21 +92,19 @@ class Comment(models.Model):
     def __str__(self):
         return self.text[:NUMBER_OF_LETTERS]
 
-    class Meta:
-        verbose_name = 'Комментарий'
-        verbose_name_plural = 'Комментарии'
-
 
 class Follow(models.Model):
     user = models.ForeignKey(
         User,
         related_name='follower',
         on_delete=models.CASCADE,
+        verbose_name='Подписчик',
     )
     author = models.ForeignKey(
         User,
         related_name='following',
         on_delete=models.CASCADE,
+        verbose_name='Автор',
     )
 
     class Meta:
